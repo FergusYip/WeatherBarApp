@@ -40,6 +40,8 @@ Note that the settings window will not display the app icon as it is the python 
 
 [py2app](https://pypi.org/project/py2app/) by Bob Ippolito and Ronald Oussoren
 
+[geopy](https://pypi.org/project/geopy/) by GeoPy Contributors
+
 # Credits
 
 Developed by Fergus Yip, 2020
