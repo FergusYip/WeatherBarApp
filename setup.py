@@ -8,9 +8,9 @@ OPTIONS = {
     'plist': {
         'LSUIElement': True,
         'NSHumanReadableCopyright': 'Copyright (c) 2020 Wai Lam Fergus Yip',
-        'CFBundleVersion': '0.1.0'
+        'CFBundleVersion': '0.1.1'
     },
-    'packages': ['rumps'],
+    'packages': ['rumps', 'requests', 'geopy'],
 }
 
 with open("README.md", "r") as fh:
@@ -28,6 +28,6 @@ setup(
     data_files=DATA_FILES,
     options={'py2app': OPTIONS},
     setup_requires=['py2app'],
-    install_requires=['rumps'],
+    install_requires=['rumps', 'requests', 'geopy'],
     classifiers=["License :: OSI Approved :: MIT License"],
 )
