@@ -4,10 +4,13 @@ import datetime
 import json
 import os
 import webbrowser
+import ssl
 
 import rumps
 import requests
 from geopy.geocoders import Nominatim
+
+ssl._create_default_https_context = ssl._create_unverified_context
 
 WEATHER_ICONS = {
     '☀️': ['clear'],
