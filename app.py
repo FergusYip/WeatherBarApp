@@ -293,9 +293,11 @@ class WeatherBarApp(rumps.App):
         ''' Send alert window displaying application information '''
         rumps.alert(
             title='About',
-            message=('Developed by Wai Lam Fergus Yip.\n'
-                     'Weather information provided by ClimaCell API\n\n'
-                     'https://github.com/FergusYip/'))
+            message=(
+                'Developed by Wai Lam Fergus Yip.\n'
+                'Weather information provided by ClimaCell API\n'
+                'Icon by Catalin Fertu, reused under the CC BY License.\n\n'
+                'https://github.com/FergusYip/WeatherBarApp'))
 
 
 def to_fahrenheit(celsius):
