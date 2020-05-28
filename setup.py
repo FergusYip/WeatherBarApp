@@ -18,12 +18,12 @@ with open("README.md", "r") as fh:
 
 setup(
     app=APP,
-    name='DrinkMore',
+    name='WeatherBar',
     author='Fergus Yip',
     author_email='fergus.yipwailam@gmail.com',
-    url='https://github.com/FergusYip/DrinkMoreApp',
+    url='https://github.com/FergusYip/WeatherBarApp',
     description=
-    'DrinkMore is a Python 3 app for Mac to remind you to drink more water.',
+    'WeatherBar is a MacOs menu bar app that displays the current weather.',
     long_description=long_description,
     data_files=DATA_FILES,
     options={'py2app': OPTIONS},
