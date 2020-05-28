@@ -77,6 +77,7 @@ class WeatherBarApp(rumps.App):
         self.config = self.read_config()
 
         if not self.config['apikey']:
+            print('ERROR: API Key is missing')
             self.handle_missing_apikey()
 
         self.weather = None
@@ -87,6 +88,9 @@ class WeatherBarApp(rumps.App):
 
     def handle_missing_apikey(self):
         ''' Open window to alert user of missing api key '''
+
+        print('Opening \'API Key is required\' window')
+
         get_apikey = 'https://developer.climacell.co/sign-up'
 
         response = rumps.alert(
@@ -125,6 +129,7 @@ class WeatherBarApp(rumps.App):
             return False
 
         if not response.text:
+            print('ERROR: API Key is not entered')
             rumps.alert(title='You did not enter an API Key',
                         message='Try again')
             return self.set_apikey()
@@ -141,6 +146,8 @@ class WeatherBarApp(rumps.App):
 
     def update_weather(self):
         ''' Update the weather '''
+        print('Updating weather')
+
         url = 'https://api.climacell.co/v3/weather/realtime'
         querystring = {
             'lat': self.config['latitude'],
@@ -159,14 +166,20 @@ class WeatherBarApp(rumps.App):
             self.update_title()
             self.update_display_units()
         except requests.HTTPError:
-            print('Failed to retrieve data')
-            if response.status_code == 403:
-                print('API Key is not valid')
+            status_code = response.status_code
+            if status_code == 403:
+                print('ERROR: API Key is not valid')
                 rumps.alert(title='ClimaCell API Key is not valid',
                             message='Please make sure it is correct.')
                 if not self.set_apikey():
                     self.handle_missing_apikey()
                 self.update_weather()
+                return
+            elif status_code == 404:
+                print('ERROR: Data for this location is not found')
+                rumps.alert(title='Location data not found',
+                            message='Please enter another location.')
+                self.prefs()
 
     def update_title(self):
         ''' Update the app title in the menu bar'''
@@ -227,6 +240,7 @@ class WeatherBarApp(rumps.App):
             return
 
         if not response.text:
+            print('ERROR: Empty location input')
             rumps.alert(title='Location cannot be empty', message='Try again')
             self.prefs()
             return
@@ -236,6 +250,7 @@ class WeatherBarApp(rumps.App):
         geolocation = Nominatim(user_agent='WeatherBar').geocode(location)
 
         if geolocation is None:
+            print('ERROR: Location not found')
             rumps.alert(title='Could not find your location',
                         message='Try again')
             self.prefs()
