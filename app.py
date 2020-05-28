@@ -314,6 +314,7 @@ class WeatherBarApp(rumps.App):
             message=(
                 'Developed by Wai Lam Fergus Yip.\n'
                 'Weather information provided by ClimaCell API\n'
+                'Geocoding provided by GeoPy Contributors\n'
                 'Icon by Catalin Fertu, reused under the CC BY License.\n\n'
                 'https://github.com/FergusYip/WeatherBarApp'))
 
