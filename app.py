@@ -116,7 +116,7 @@ class WeatherBarApp(rumps.App):
         ''' Open window to set api key '''
         api_key_window = rumps.Window(
             title='Enter your API key:',
-            message='You may have to right click the text box to paste.',
+            message='Right click to paste',
             default_text=self.config['apikey'],
             ok='Confirm',
             cancel='I don\'t have one',
@@ -227,7 +227,7 @@ class WeatherBarApp(rumps.App):
             current_location = self.config['location']
 
         settings_window = rumps.Window(
-            message='',
+            message='Right click to paste',
             title='Enter your location:',
             default_text=f'{current_location}',
             ok='Apply',
