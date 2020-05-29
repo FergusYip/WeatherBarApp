@@ -151,7 +151,16 @@ class WeatherBarApp(rumps.App):
         ''' Update the weather '''
         print('Updating weather')
 
-        url = 'https://api.climacell.co/v3/weather/realtime'
+        self.weather = self.get_weather()
+        self.temp = int(self.weather['temp']['value'])
+        self.update_time()
+        self.update_title()
+        self.update_display_units()
+
+    def get_weather(self):
+        ''' Get weather from API '''
+        print('Get weather from API')
+
         querystring = {
             'lat': self.config['latitude'],
             'lon': self.config['longitude'],
@@ -159,15 +168,12 @@ class WeatherBarApp(rumps.App):
             'apikey': self.config['apikey'],
             'fields': ['temp', 'weather_code']
         }
+        url = 'https://api.climacell.co/v3/weather/realtime'
         response = requests.get(url, params=querystring)
+
         try:
             response.raise_for_status()
-            weather_info = response.json()
-            self.weather = weather_info
-            self.temp = int(self.weather['temp']['value'])
-            self.update_time()
-            self.update_title()
-            self.update_display_units()
+            return response.json()
         except requests.HTTPError:
             status_code = response.status_code
             if status_code == 403:
@@ -186,18 +192,21 @@ class WeatherBarApp(rumps.App):
 
     def update_title(self):
         ''' Update the app title in the menu bar'''
+        print('Updating title')
         emoji = get_icon(self.weather['weather_code']['value'])
         temp = int(self.temp)
         self.title = f'{emoji} {temp}°'
 
     def update_time(self):
         ''' Update the last updated time in the app menu '''
+        print('Updating time')
         now = datetime.datetime.now()
         formatted = now.strftime("%b %d %H:%M:%S")
         self.last_updated_menu.title = formatted
 
     def update_display_units(self):
         ''' Update the units displayed in the app menu '''
+        print('Updating display units')
         if self.config['unit_system'] == 'si':
             self.display_units.title = 'Metric Units (C)'
         else:
@@ -205,6 +214,8 @@ class WeatherBarApp(rumps.App):
 
     def change_units(self, _):
         ''' Toggle between metric and imperial units '''
+        print('Changing units')
+
         if self.config['unit_system'] == 'si':
             self.config['unit_system'] = 'us'
             self.temp = to_fahrenheit(self.temp)
