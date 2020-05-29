@@ -87,7 +87,7 @@ class WeatherBarApp(rumps.App):
 
         self.temp = None
 
-        rumps.Timer(self.update_weather_timer, 3600).start()
+        rumps.Timer(self.update_weather_timer, 300).start()
 
     def handle_missing_apikey(self):
         ''' Open window to alert user of missing api key '''
@@ -297,10 +297,12 @@ class WeatherBarApp(rumps.App):
             with open(filepath, mode='r') as config_file:
                 print('Loading USER config')
                 config = json.load(config_file)
-                if config.keys() != self.default_config.keys():
+
+                if dict_types(config) != dict_types(self.default_config):
                     rumps.alert(title='Error when loading config',
                                 message='Default settings have been applied')
                     return self.default_config
+
                 return config
         except:
             print('Loading DEFAULT config')
@@ -327,6 +329,16 @@ def to_fahrenheit(celsius):
 def to_celsius(fahrenheit):
     ''' Convert fahrenheit to celsius '''
     return (fahrenheit - 32) * 5.0 / 9.0
+
+
+def dict_types(dictionary):
+    ''' Return a new dictionary where the values are changed to their types '''
+    type_dict = {}
+
+    for key, value in dictionary.items():
+        type_dict[key] = type(value)
+
+    return type_dict
 
 
 if __name__ == '__main__':
