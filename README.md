@@ -3,7 +3,7 @@
 WeatherBar is a Python 3 app for Mac that displays the current weather and temperature in the menu bar. It utilises the ClimaCell weather API to get weather information and supports both metric and imperial unit systems.
 
 <div align="center">
-  <table>
+  <table border="none">
     <tr>
       <td>
         <img
