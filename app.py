@@ -352,5 +352,30 @@ def dict_types(dictionary):
     return type_dict
 
 
+def get_location():
+    IP_API = 'http://ip-api.com/json/'
+    response = requests.get(IP_API)
+
+    try:
+        response.raise_for_status()
+    except requests.HTTPError:
+        return None
+
+    data = response.json()
+
+    if data['status'] == 'fail':
+        return None
+
+    city = data['city']
+    regionName = data['regionName']
+    country = data['country']
+
+    return {
+        'lat': data['lat'],
+        'lon': data['lon'],
+        'location': ', '.join([city, regionName, country])
+    }
+
+
 if __name__ == '__main__':
     WeatherBarApp().run()
