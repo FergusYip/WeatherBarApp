@@ -75,19 +75,36 @@ class WeatherBarApp(rumps.App):
             'latitude': 40.7410861,
             'longitude': -73.9896297241625,
             'unit_system': 'si',
-            'apikey': ''
+            'apikey': '',
+            'custom': False
         }
-        self.config = self.read_config()
+        self.config = self.default_config
+
+        self.weather = None
+        self.temp = None
+
+        self.timer = rumps.Timer(self.update_weather_timer, 300)
+
+        self.start()
+
+    def start(self):
+        try:
+            self.config = self.read_config()
+        except IncompatibleConfigError():
+            rumps.alert(title='Error when loading config',
+                        message='Default settings have been applied')
+        except FileNotFoundError:
+            pass
 
         if not self.config['apikey']:
             print('ERROR: API Key is missing')
             self.handle_missing_apikey()
 
-        self.weather = None
+        location = get_location().get('location')
+        if location and location != self.config['location']:
+            self.prefs(location, True)
 
-        self.temp = None
-
-        rumps.Timer(self.update_weather_timer, 300).start()
+        self.timer.start()
 
     def handle_missing_apikey(self):
         ''' Open window to alert user of missing api key '''
@@ -137,7 +154,7 @@ class WeatherBarApp(rumps.App):
                         message='Try again')
             return self.set_apikey()
 
-        self.config['apikey'] = response.text
+        self.config['apikey'] = response.text.strip()
 
         self.save_config()
 
@@ -304,20 +321,14 @@ class WeatherBarApp(rumps.App):
         ''' Load the config to a JSON file in the application support folder '''
         filename = self.config_filename
         filepath = os.path.join(rumps.application_support(self.name), filename)
-        try:
-            with open(filepath, mode='r') as config_file:
-                print('Loading USER config')
-                config = json.load(config_file)
+        with open(filepath, mode='r') as config_file:
+            print('Loading USER config')
+            config = json.load(config_file)
 
-                if dict_types(config) != dict_types(self.default_config):
-                    rumps.alert(title='Error when loading config',
-                                message='Default settings have been applied')
-                    return self.default_config
+            if check_config(config, self.default_config):
+                raise IncompatibleConfigError()
 
-                return config
-        except:
-            print('Loading DEFAULT config')
-            return self.default_config
+            return config
 
     @rumps.clicked('About')
     def about(self, _):
@@ -342,14 +353,11 @@ def to_celsius(fahrenheit):
     return (fahrenheit - 32) * 5.0 / 9.0
 
 
-def dict_types(dictionary):
-    ''' Return a new dictionary where the values are changed to their types '''
-    type_dict = {}
-
-    for key, value in dictionary.items():
-        type_dict[key] = type(value)
-
-    return type_dict
+def check_config(config, reference_config):
+    for key in config:
+        if type(config[key]) != type(reference_config[key]):
+            return False
+    return True
 
 
 def get_location():
@@ -375,6 +383,17 @@ def get_location():
         'lon': data['lon'],
         'location': ', '.join([city, regionName, country])
     }
+
+
+class IncompatibleConfigError(Exception):
+    """Exception raised for errors in the config.
+
+    Attributes:
+        message -- explanation of the error
+    """
+    def __init__(self, message="Config was read but was not compatible."):
+        self.message = message
+        super().__init__(self.message)
 
 
 if __name__ == '__main__':
