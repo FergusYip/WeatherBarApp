@@ -12,6 +12,10 @@ from geopy.geocoders import Nominatim
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
+GEOCODER = Nominatim(user_agent='WeatherBar')
+
+CONFIG_FILE = 'config.json'
+
 WEATHER_ICONS = {
     '☀️': ['clear'],
     '⛅': ['partly_cloudy'],
@@ -69,14 +73,12 @@ class WeatherBarApp(rumps.App):
 
         # -------------------------------------------------------
 
-        self.config_filename = 'config.json'
         self.default_config = {
             'location': '175 5th Avenue NYC',
             'latitude': 40.7410861,
             'longitude': -73.9896297241625,
             'unit_system': 'si',
             'apikey': '',
-            'custom': False
         }
         self.config = self.default_config
 
@@ -88,23 +90,28 @@ class WeatherBarApp(rumps.App):
         self.start()
 
     def start(self):
+        ''' Restoring the config and start the timer '''
+        detect_location = False
+
         try:
             self.config = self.read_config()
-        except IncompatibleConfigError():
-            rumps.alert(title='Error when loading config',
+        except:
+            rumps.alert(title='Something went wrong whilst loading settings',
                         message='Default settings have been applied')
-        except FileNotFoundError:
-            pass
+            detect_location = True
 
         if not self.config['apikey']:
             print('ERROR: API Key is missing')
             self.handle_missing_apikey()
 
-        location = get_location().get('location')
-        if location and location != self.config['location']:
-            self.prefs(location, True)
+        if detect_location:
+            try:
+                self.config = self.local_config()
+            except LocationNotFoundError:
+                print('Could not get current location')
 
         self.timer.start()
+        self.save_config()
 
     def handle_missing_apikey(self):
         ''' Open window to alert user of missing api key '''
@@ -200,12 +207,12 @@ class WeatherBarApp(rumps.App):
                 if not self.set_apikey():
                     self.handle_missing_apikey()
                 self.update_weather()
-                return
             elif status_code == 404:
                 print('ERROR: Data for this location is not found')
                 rumps.alert(title='Location data not found',
                             message='Please enter another location.')
                 self.prefs()
+            return None
 
     def update_title(self):
         ''' Update the app title in the menu bar'''
@@ -258,8 +265,8 @@ class WeatherBarApp(rumps.App):
             current_location = self.config['location']
 
         settings_window = rumps.Window(
-            message='Right click to paste',
             title='Enter your location:',
+            message='Right click to paste',
             default_text=f'{current_location}',
             ok='Apply',
             cancel='Cancel',
@@ -278,7 +285,7 @@ class WeatherBarApp(rumps.App):
 
         location = response.text
 
-        geolocation = Nominatim(user_agent='WeatherBar').geocode(location)
+        geolocation = GEOCODER.geocode(location)
 
         if geolocation is None:
             print('ERROR: Location not found')
@@ -287,18 +294,11 @@ class WeatherBarApp(rumps.App):
             self.prefs()
             return
 
-        is_correct = rumps.alert(title='Is this your location?',
-                                 message=geolocation,
-                                 ok='Yes',
-                                 cancel='No')
+        self.confirm_location(geolocation)
 
-        if not is_correct:
-            self.prefs(location)
-            return
-
-        self.config['location'] = location
-        self.config['latitude'] = geolocation.latitude
-        self.config['longitude'] = geolocation.longitude
+        self.config = modify_location(self.config, location,
+                                      geolocation.latitude,
+                                      geolocation.longitude)
 
         print(f'Successfully changed location to {location}')
 
@@ -311,7 +311,7 @@ class WeatherBarApp(rumps.App):
 
     def save_config(self):
         ''' Save the config to a JSON file in the application support folder '''
-        filename = self.config_filename
+        filename = CONFIG_FILE
         filepath = os.path.join(rumps.application_support(self.name), filename)
         with open(filepath, mode='w') as config_file:
             print('Saving config')
@@ -319,16 +319,41 @@ class WeatherBarApp(rumps.App):
 
     def read_config(self):
         ''' Load the config to a JSON file in the application support folder '''
-        filename = self.config_filename
+        filename = CONFIG_FILE
         filepath = os.path.join(rumps.application_support(self.name), filename)
         with open(filepath, mode='r') as config_file:
-            print('Loading USER config')
             config = json.load(config_file)
 
-            if check_config(config, self.default_config):
+            if not valid_config(config, self.default_config):
                 raise IncompatibleConfigError()
 
             return config
+
+    def local_config(self):
+        '''
+        Return a version of the current config where the location values are
+        set to the current location of the user
+        '''
+        location = get_location()
+        if not valid_geopy_location(location['lat'], location['lon']):
+            raise LocationNotFoundError
+        self.confirm_location(location['location'])
+        return modify_location(self.config, location['location'],
+                               location['lat'], location['lon'])
+
+    def confirm_location(self, location):
+        '''
+        Create an alert window to ask if the location is correct.
+        If incorrect, open the settings window.
+        '''
+        is_correct = rumps.alert(title='Is this your location?',
+                                 message=location,
+                                 ok='Yes',
+                                 cancel='No')
+        if not is_correct:
+            return self.prefs(location)
+
+        return is_correct
 
     @rumps.clicked('About')
     def about(self, _):
@@ -338,7 +363,7 @@ class WeatherBarApp(rumps.App):
             message=(
                 'Developed by Wai Lam Fergus Yip.\n'
                 'Weather information provided by ClimaCell API\n'
-                'Geocoding provided by GeoPy Contributors\n'
+                'Geocoding provided by GeoPy Contributors and IP-API\n'
                 'Icon by Catalin Fertu, reused under the CC BY License.\n\n'
                 'https://github.com/FergusYip/WeatherBarApp'))
 
@@ -353,45 +378,81 @@ def to_celsius(fahrenheit):
     return (fahrenheit - 32) * 5.0 / 9.0
 
 
-def check_config(config, reference_config):
-    for key in config:
-        if type(config[key]) != type(reference_config[key]):
+def valid_config(config, reference_config):
+    ''' Check if a config is valid according to a reference config '''
+    for key in reference_config:
+        if not isinstance(config.get(key), type(reference_config[key])):
             return False
     return True
 
 
 def get_location():
-    IP_API = 'http://ip-api.com/json/'
-    response = requests.get(IP_API)
+    ''' Get the geolocation of the user via a request to IP-API '''
+    response = requests.get('http://ip-api.com/json/')
 
     try:
         response.raise_for_status()
     except requests.HTTPError:
-        return None
+        raise LocationNotFoundError()
 
     data = response.json()
 
     if data['status'] == 'fail':
-        return None
+        raise LocationNotFoundError()
 
     city = data['city']
-    regionName = data['regionName']
+    zip_code = data['zip']
+    region = data['regionName']
     country = data['country']
+
+    city_zip = ' '.join([city, zip_code])
 
     return {
         'lat': data['lat'],
         'lon': data['lon'],
-        'location': ', '.join([city, regionName, country])
+        'location': ', '.join([city_zip, region, country])
     }
 
 
+def valid_geopy_location(latitude, longitude):
+    ''' Check if a coordinate is a valid geopy geolocation '''
+    return bool(GEOCODER.reverse((latitude, longitude)))
+
+
+def modify_location(config, location=None, latitude=None, longitude=None):
+    '''
+    Return a config where the location, latitude, and longitude are different
+    '''
+    modified_config = dict(config)
+    if location:
+        modified_config['location'] = location
+    if latitude:
+        modified_config['latitude'] = latitude
+    if longitude:
+        modified_config['longitude'] = longitude
+    return modified_config
+
+
 class IncompatibleConfigError(Exception):
-    """Exception raised for errors in the config.
+    """
+    Exception raised for errors in the config.
 
     Attributes:
         message -- explanation of the error
     """
     def __init__(self, message="Config was read but was not compatible."):
+        self.message = message
+        super().__init__(self.message)
+
+
+class LocationNotFoundError(Exception):
+    """
+    Exception raised when the location is not found
+
+    Attributes:
+        message -- explanation of the error
+    """
+    def __init__(self, message="Location was not found"):
         self.message = message
         super().__init__(self.message)
 
