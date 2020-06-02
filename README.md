@@ -61,7 +61,13 @@ Run the app
 
 Note that the settings window will not display the app icon as it is the python interpreter that is running the application.
 
-# Dependencies
+# Service Dependencies
+
+[ClimaCellAPI](https://www.climacell.co/) for Weather Data
+
+[ip-api](https://ip-api.com/) for IP Geolocation data
+
+# Package Dependencies
 
 [rumps](https://pypi.org/project/rumps/) by Jared Suttles and Dan Palmer
 
