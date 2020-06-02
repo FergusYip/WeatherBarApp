@@ -270,7 +270,7 @@ class WeatherBarApp(rumps.App):
             default_text=f'{current_location}',
             ok='Apply',
             cancel='Cancel',
-            dimensions=(250, 20),
+            dimensions=(250, 60),
         )
         response = settings_window.run()
 
