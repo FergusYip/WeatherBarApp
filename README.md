@@ -33,33 +33,7 @@ WeatherBar is a Python 3 app for Mac that displays the current weather and tempe
 
 # Running the app
 
-## Precompiled
-
-Download the latest precompiled version of the app - [here](https://github.com/FergusYip/DrinkMoreApp/releases)
-
-## Compile it yourself
-
-Install requirements
-
-`pip3 install -r requirements.txt`
-
-Build app
-
-`python setup.py py2app`
-
-The compiled app will be found in the `dist` folder
-
-## Run without compiling
-
-Install requirements
-
-`pip3 install -r requirements.txt`
-
-Run the app
-
-`python3 app.py`
-
-Note that the settings window will not display the app icon as it is the python interpreter that is running the application.
+Installation instructions can be found in the project wiki - [here](https://github.com/FergusYip/WeatherBarApp/wiki)
 
 # Service Dependencies
 
