@@ -101,7 +101,10 @@ class WeatherBarApp(rumps.App):
 
         try:
             self.config = self.read_config()
-        except:
+        except FileNotFoundError:
+            # First time running app
+            detect_location = True
+        except:  # IncompatibleConfigError:
             rumps.alert(title='Something went wrong whilst loading settings',
                         message='Default settings have been applied')
             detect_location = True
