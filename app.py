@@ -8,6 +8,7 @@ import ssl
 
 import rumps
 import requests
+import geopy
 from geopy.geocoders import Nominatim
 
 from error import LocationNotFoundError
@@ -207,6 +208,9 @@ class WeatherBarApp(rumps.App):
             rumps.alert(title='Location data not found',
                         message='Please enter another location.')
             self.prefs()
+        except requests.ConnectionError:
+            print('ERROR: Connection Error')
+            self.handle_connection_error()
 
     def update_title(self):
         ''' Update the app title in the menu bar'''
@@ -294,7 +298,15 @@ class WeatherBarApp(rumps.App):
 
         location = response.text
 
-        geolocation = GEOCODER.geocode(location)
+        try:
+            geolocation = GEOCODER.geocode(location)
+        except geopy.exc.GeocoderServiceError:
+            print('ERROR: Connection error')
+            self.handle_connection_error()
+        except:
+            print('ERROR: Someting went wrong with geopy')
+            rumps.alert(title='Soemthing went wrong with geopy')
+            rumps.quit_application()
 
         if geolocation is None:
             print('ERROR: Location not found')
@@ -346,8 +358,23 @@ class WeatherBarApp(rumps.App):
         Return a version of the current config where the location values are
         set to the current location of the user
         '''
-        location = get_location()
-        if not valid_geopy_location(location['lat'], location['lon']):
+        try:
+            location = get_location()
+        except requests.ConnectionError:
+            print('ERROR: Connection error')
+            self.handle_connection_error()
+
+        try:
+            is_valid = valid_geopy_location(location['lat'], location['lon'])
+        except geopy.exc.GeocoderServiceError:
+            print('ERROR: Connection error')
+            self.handle_connection_error()
+        except:
+            print('ERROR: Someting went wrong with geopy')
+            rumps.alert(title='Soemthing went wrong with geopy')
+            rumps.quit_application()
+
+        if not is_valid:
             raise LocationNotFoundError
         self.confirm_location(location['location'])
         return modify_location(self.config, location['location'],
@@ -366,6 +393,11 @@ class WeatherBarApp(rumps.App):
             return self.prefs(location)
 
         return is_correct
+
+    def handle_connection_error(self):
+        rumps.alert(title='Unable to get weather data',
+                    message='Please check your internet connection.')
+        rumps.quit_application()
 
     @rumps.clicked('About')
     def about(self, _):
