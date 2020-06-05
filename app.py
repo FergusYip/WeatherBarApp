@@ -265,12 +265,26 @@ class WeatherBarApp(rumps.App):
             default_text=f'{current_location}',
             ok='Apply',
             cancel='Cancel',
-            dimensions=(250, 60),
+            dimensions=(400, 40),
         )
+        settings_window.add_button('Use Current Location')
         response = settings_window.run()
 
-        if response.clicked != 1:
+        # Cancel
+        if response.clicked == 0:
             return
+
+        # Use current location
+        if response.clicked == 2:
+            try:
+                self.config = self.local_config()
+                return
+            except LocationNotFoundError:
+                print('Could not get current location')
+                rumps.alert(title='Location not found',
+                            message='Could not obtain your current location')
+                self.prefs()
+                return
 
         if not response.text:
             print('ERROR: Empty location input')
