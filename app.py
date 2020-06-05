@@ -10,6 +10,10 @@ import rumps
 import requests
 from geopy.geocoders import Nominatim
 
+from error import LocationNotFoundError
+from climacell import ClimaCell, APIKeyError
+from ip_api import get_ip_location
+
 ssl._create_default_https_context = ssl._create_unverified_context
 
 GEOCODER = Nominatim(user_agent='WeatherBar')
@@ -87,6 +91,8 @@ class WeatherBarApp(rumps.App):
 
         self.timer = rumps.Timer(self.update_weather_timer, 300)
 
+        self.climacell = ClimaCell()
+
         self.start()
 
     def start(self):
@@ -110,21 +116,24 @@ class WeatherBarApp(rumps.App):
             except LocationNotFoundError:
                 print('Could not get current location')
 
-        self.timer.start()
+        self.climacell.set_location(self.config['latitude'],
+                                    self.config['longitude'])
+        self.climacell.set_unit_system(self.config['unit_system'])
+        self.climacell.set_apikey(self.config['apikey'])
+
         self.save_config()
+        self.timer.start()
 
     def handle_missing_apikey(self):
         ''' Open window to alert user of missing api key '''
 
         print('Opening \'API Key is required\' window')
 
-        get_apikey = 'https://developer.climacell.co/sign-up'
-
         response = rumps.alert(
             title='ClimaCell API Key is required',
             message=(
                 'Click \"Register\" or go to the following url:\n'
-                f'{get_apikey}\n\n'
+                f'{self.climacell.signup_link}\n\n'
                 'Note: This application is not affiliated with ClimaCell'),
             ok='Register',
             cancel='Quit',
@@ -134,7 +143,7 @@ class WeatherBarApp(rumps.App):
             rumps.quit_application()
 
         if response == 1:  # Register
-            webbrowser.open(get_apikey)
+            webbrowser.open(self.climacell.signup_link)
 
         if not self.set_apikey():  # Cancelled enter api key window
             self.handle_missing_apikey()  # Reopen api required alert
@@ -155,14 +164,16 @@ class WeatherBarApp(rumps.App):
         if response.clicked == 0:  # Cancel
             return False
 
-        if not response.text:
+        apikey = response.text.strip()
+
+        if not apikey:
             print('ERROR: API Key is not entered')
             rumps.alert(title='You did not enter an API Key',
                         message='Try again')
             return self.set_apikey()
 
-        self.config['apikey'] = response.text.strip()
-
+        self.config['apikey'] = apikey
+        self.climacell.set_apikey(apikey)
         self.save_config()
 
         return True
@@ -175,44 +186,24 @@ class WeatherBarApp(rumps.App):
         ''' Update the weather '''
         print('Updating weather')
 
-        self.weather = self.get_weather()
-        self.temp = int(self.weather['temp']['value'])
-        self.update_time()
-        self.update_title()
-        self.update_display_units()
-
-    def get_weather(self):
-        ''' Get weather from API '''
-        print('Get weather from API')
-
-        querystring = {
-            'lat': self.config['latitude'],
-            'lon': self.config['longitude'],
-            'unit_system': self.config['unit_system'],
-            'apikey': self.config['apikey'],
-            'fields': ['temp', 'weather_code']
-        }
-        url = 'https://api.climacell.co/v3/weather/realtime'
-        response = requests.get(url, params=querystring)
-
         try:
-            response.raise_for_status()
-            return response.json()
-        except requests.HTTPError:
-            status_code = response.status_code
-            if status_code == 403:
-                print('ERROR: API Key is not valid')
-                rumps.alert(title='ClimaCell API Key is not valid',
-                            message='Please make sure it is correct.')
-                if not self.set_apikey():
-                    self.handle_missing_apikey()
-                self.update_weather()
-            elif status_code == 404:
-                print('ERROR: Data for this location is not found')
-                rumps.alert(title='Location data not found',
-                            message='Please enter another location.')
-                self.prefs()
-            return None
+            self.weather = self.climacell.get_weather()
+            self.temp = int(self.weather['temp']['value'])
+            self.update_time()
+            self.update_title()
+            self.update_display_units()
+        except APIKeyError:
+            print('ERROR: API Key is not valid')
+            rumps.alert(title='ClimaCell API Key is not valid',
+                        message='Please make sure it is correct.')
+            if not self.set_apikey():
+                self.handle_missing_apikey()
+            self.update_weather()
+        except LocationNotFoundError:
+            print('ERROR: Data for this location is not found')
+            rumps.alert(title='Location data not found',
+                        message='Please enter another location.')
+            self.prefs()
 
     def update_title(self):
         ''' Update the app title in the menu bar'''
@@ -247,6 +238,7 @@ class WeatherBarApp(rumps.App):
             self.config['unit_system'] = 'si'
             self.temp = to_celsius(self.temp)
 
+        self.climacell.set_unit_system(self.config['unit_system'])
         self.update_title()
         self.update_display_units()
         self.save_config()
@@ -296,9 +288,12 @@ class WeatherBarApp(rumps.App):
 
         self.confirm_location(geolocation)
 
-        self.config = modify_location(self.config, location,
-                                      geolocation.latitude,
-                                      geolocation.longitude)
+        latitude = geolocation.latitude
+        longitude = geolocation.longitude
+
+        self.config = modify_location(self.config, location, latitude,
+                                      longitude)
+        self.climacell.set_location(latitude, longitude)
 
         print(f'Successfully changed location to {location}')
 
@@ -388,17 +383,7 @@ def valid_config(config, reference_config):
 
 def get_location():
     ''' Get the geolocation of the user via a request to IP-API '''
-    response = requests.get('http://ip-api.com/json/')
-
-    try:
-        response.raise_for_status()
-    except requests.HTTPError:
-        raise LocationNotFoundError()
-
-    data = response.json()
-
-    if data['status'] == 'fail':
-        raise LocationNotFoundError()
+    data = get_ip_location()
 
     city = data['city']
     zip_code = data['zip']
@@ -441,18 +426,6 @@ class IncompatibleConfigError(Exception):
         message -- explanation of the error
     """
     def __init__(self, message="Config was read but was not compatible."):
-        self.message = message
-        super().__init__(self.message)
-
-
-class LocationNotFoundError(Exception):
-    """
-    Exception raised when the location is not found
-
-    Attributes:
-        message -- explanation of the error
-    """
-    def __init__(self, message="Location was not found"):
         self.message = message
         super().__init__(self.message)
 
