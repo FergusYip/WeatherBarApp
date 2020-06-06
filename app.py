@@ -219,7 +219,7 @@ class WeatherBarApp(rumps.App):
             self.prefs()
         except requests.ConnectionError:
             print('ERROR: Connection Error')
-            self.handle_connection_error(silent=silent)
+            self.handle_connection_error(silent=silent, change_icon=not silent)
 
     def update_title(self, title=None):
         ''' Update the app title in the menu bar'''
@@ -425,13 +425,15 @@ class WeatherBarApp(rumps.App):
 
         return is_correct
 
-    def handle_connection_error(self, silent=False):
+    def handle_connection_error(self, silent=False, change_icon=False):
         # Do nothing
         if silent:
             return
 
-        self.update_title('❕')
-        self.update_time('No Connection')
+        if change_icon:
+            self.update_title('❕')
+            self.update_time('No Connection')
+
         rumps.alert(title='Unable to get weather data',
                     message='Please check your internet connection.')
 
