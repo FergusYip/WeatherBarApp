@@ -8,6 +8,7 @@ import ssl
 
 import rumps
 import requests
+import geopy
 from geopy.geocoders import Nominatim
 
 from error import LocationNotFoundError
@@ -17,7 +18,7 @@ from ip_api import get_ip_location
 ssl._create_default_https_context = ssl._create_unverified_context
 
 GEOCODER = Nominatim(user_agent='WeatherBar')
-
+INTERVAL_SECONDS = 300
 CONFIG_FILE = 'config.json'
 
 WEATHER_ICONS = {
@@ -89,7 +90,7 @@ class WeatherBarApp(rumps.App):
         self.weather = None
         self.temp = None
 
-        self.timer = rumps.Timer(self.update_weather_timer, 300)
+        self.timer = rumps.Timer(self.update_weather_timer, INTERVAL_SECONDS)
 
         self.climacell = ClimaCell()
 
@@ -118,6 +119,10 @@ class WeatherBarApp(rumps.App):
                 self.config = self.local_config()
             except LocationNotFoundError:
                 print('Could not get current location')
+            except requests.ConnectionError:
+                print('Could not get current location')
+            except Exception as err:
+                print(err)
 
         self.climacell.set_location(self.config['latitude'],
                                     self.config['longitude'])
@@ -125,6 +130,12 @@ class WeatherBarApp(rumps.App):
         self.climacell.set_apikey(self.config['apikey'])
 
         self.save_config()
+
+        self.update_display_units()
+
+        # Call to verify connection
+        self.update_weather(silent=False)
+
         self.timer.start()
 
     def handle_missing_apikey(self):
@@ -185,16 +196,15 @@ class WeatherBarApp(rumps.App):
         ''' Function to call update_weather from timer '''
         self.update_weather()
 
-    def update_weather(self):
+    def update_weather(self, silent=True):
         ''' Update the weather '''
         print('Updating weather')
 
         try:
             self.weather = self.climacell.get_weather()
-            self.temp = int(self.weather['temp']['value'])
+            self.temp = int(round(self.weather['temp']['value'], 0))
             self.update_time()
             self.update_title()
-            self.update_display_units()
         except APIKeyError:
             print('ERROR: API Key is not valid')
             rumps.alert(title='ClimaCell API Key is not valid',
@@ -207,17 +217,30 @@ class WeatherBarApp(rumps.App):
             rumps.alert(title='Location data not found',
                         message='Please enter another location.')
             self.prefs()
+        except requests.ConnectionError:
+            print('ERROR: Connection Error')
+            self.handle_connection_error(silent=silent, change_icon=not silent)
 
-    def update_title(self):
+    def update_title(self, title=None):
         ''' Update the app title in the menu bar'''
         print('Updating title')
+
+        if title:
+            self.title = title
+            return
+
         emoji = get_icon(self.weather['weather_code']['value'])
-        temp = int(self.temp)
+        temp = int(round(self.temp, 0))
         self.title = f'{emoji} {temp}°'
 
-    def update_time(self):
+    def update_time(self, time=None):
         ''' Update the last updated time in the app menu '''
         print('Updating time')
+
+        if time:
+            self.last_updated_menu.title = time
+            return
+
         now = datetime.datetime.now()
         formatted = now.strftime("%b %d %H:%M:%S")
         self.last_updated_menu.title = formatted
@@ -278,29 +301,58 @@ class WeatherBarApp(rumps.App):
         if response.clicked == 2:
             try:
                 self.config = self.local_config()
+                self.climacell.set_location(self.config['latitude'],
+                                            self.config['longitude'])
+                location = self.config['location']
+                print(f'Successfully changed location to {location}')
+
+                self.save_config()
+
+                rumps.alert(
+                    title='Success!',
+                    message=f'Your location has been changed to {location}.')
+
+                self.update_weather()
                 return
             except LocationNotFoundError:
                 print('Could not get current location')
                 rumps.alert(title='Location not found',
                             message='Could not obtain your current location')
-                self.prefs()
+                self.prefs(current_location)
                 return
+            except requests.ConnectionError:
+                print('ERROR: Connection error')
+                self.handle_connection_error()
+                self.prefs(current_location)
+                return
+            except Exception as err:
+                print(err)
 
         if not response.text:
             print('ERROR: Empty location input')
             rumps.alert(title='Location cannot be empty', message='Try again')
-            self.prefs()
+            self.prefs(current_location)
             return
 
         location = response.text
 
-        geolocation = GEOCODER.geocode(location)
+        try:
+            geolocation = GEOCODER.geocode(location)
+        except geopy.exc.GeocoderServiceError:
+            print('ERROR: Connection error')
+            self.handle_connection_error()
+            self.prefs(current_location)
+            return
+        except:
+            print('ERROR: Someting went wrong with geopy')
+            rumps.alert(title='Soemthing went wrong with geopy')
+            rumps.quit_application()
 
         if geolocation is None:
             print('ERROR: Location not found')
             rumps.alert(title='Could not find your location',
                         message='Try again')
-            self.prefs()
+            self.prefs(location)
             return
 
         self.confirm_location(geolocation)
@@ -347,7 +399,13 @@ class WeatherBarApp(rumps.App):
         set to the current location of the user
         '''
         location = get_location()
-        if not valid_geopy_location(location['lat'], location['lon']):
+
+        try:
+            is_valid = valid_geopy_location(location['lat'], location['lon'])
+        except geopy.exc.GeocoderServiceError:
+            raise requests.ConnectionError()
+
+        if not is_valid:
             raise LocationNotFoundError
         self.confirm_location(location['location'])
         return modify_location(self.config, location['location'],
@@ -366,6 +424,18 @@ class WeatherBarApp(rumps.App):
             return self.prefs(location)
 
         return is_correct
+
+    def handle_connection_error(self, silent=False, change_icon=False):
+        # Do nothing
+        if silent:
+            return
+
+        if change_icon:
+            self.update_title('❕')
+            self.update_time('No Connection')
+
+        rumps.alert(title='Unable to get weather data',
+                    message='Please check your internet connection.')
 
     @rumps.clicked('About')
     def about(self, _):
