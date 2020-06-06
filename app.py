@@ -58,6 +58,7 @@ class WeatherBarApp(rumps.App):
     ''' WeatherBarApp '''
     def __init__(self):
         super(WeatherBarApp, self).__init__('WeatherBar')
+        self.template = True
 
         self.last_updated_menu = rumps.MenuItem(title='')
         self.display_units = rumps.MenuItem(title='',
@@ -221,14 +222,10 @@ class WeatherBarApp(rumps.App):
             print('ERROR: Connection Error')
             self.handle_connection_error(silent=silent, change_icon=not silent)
 
-    def update_title(self, title=None):
+    def update_title(self):
         ''' Update the app title in the menu bar'''
         print('Updating title')
-
-        if title:
-            self.title = title
-            return
-
+        self.icon = None
         emoji = get_icon(self.weather['weather_code']['value'])
         temp = int(round(self.temp, 0))
         self.title = f'{emoji} {temp}°'
@@ -431,7 +428,7 @@ class WeatherBarApp(rumps.App):
             return
 
         if change_icon:
-            self.update_title('❕')
+            self.icon = 'menubar_alert_icon.ico'
             self.update_time('No Connection')
 
         rumps.alert(title='Unable to get weather data',
