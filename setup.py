@@ -1,7 +1,7 @@
 from setuptools import setup
 
 APP = ['app.py']
-DATA_FILES = []
+DATA_FILES = ['menubar_alert_icon.ico']
 OPTIONS = {
     'iconfile': 'app_icon.icns',
     'argv_emulation': True,
