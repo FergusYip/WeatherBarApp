@@ -1,7 +1,6 @@
 ''' DrinkMore is a MacOS menu bar app to remind you to drink more water '''
 
 import datetime
-import json
 import os
 import webbrowser
 import ssl
@@ -15,12 +14,16 @@ from geopy.geocoders import Nominatim
 from error import LocationNotFoundError
 from climacell import ClimaCell, APIKeyError
 from ip_api import get_ip_location
+from config import Config, valid_config
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
-GEOCODER = Nominatim(user_agent='WeatherBar')
+APP_NAME = 'WeatherBar'
+GEOCODER = Nominatim(user_agent=APP_NAME)
 INTERVAL_SECONDS = 300
-CONFIG_FILE = 'config.json'
+CONFIG_NAME = 'config.json'
+APP_SUPPORT_DIR = rumps.application_support(APP_NAME)
+CONFIG = Config(APP_SUPPORT_DIR, CONFIG_NAME)
 
 WEATHER_ICONS = {
     '☀️': ['clear'],
@@ -108,7 +111,10 @@ class WeatherBarApp(rumps.App):
 
         try:
             self.logger.info('Trying to read config')
-            self.config = self.read_config()
+            config = CONFIG.read()
+            if not valid_config(config, self.default_config):
+                raise IncompatibleConfigError()
+            self.config = config
         except FileNotFoundError:
             # First time running app
             self.logger.info('Config file not found')
@@ -120,7 +126,7 @@ class WeatherBarApp(rumps.App):
             detect_location = True
 
         if not self.config['apikey']:
-            self.logger.log('ClimaCell API key is misising')
+            self.logger.error('ClimaCell API key is misising')
             self.handle_missing_apikey()
 
         if detect_location:
@@ -142,7 +148,7 @@ class WeatherBarApp(rumps.App):
         self.climacell.set_unit_system(self.config['unit_system'])
         self.climacell.set_apikey(self.config['apikey'])
 
-        self.save_config()
+        CONFIG.save(self.config)
 
         self.update_display_units()
 
@@ -207,7 +213,7 @@ class WeatherBarApp(rumps.App):
         self.logger.info('Setting API Key')
         self.config['apikey'] = apikey
         self.climacell.set_apikey(apikey)
-        self.save_config()
+        CONFIG.save(self.config)
 
         return True
 
@@ -294,7 +300,7 @@ class WeatherBarApp(rumps.App):
             self.update_title()
 
         self.update_display_units()
-        self.save_config()
+        CONFIG.save(self.config)
 
     @rumps.clicked('Change Location')
     def settings(self, _):
@@ -339,7 +345,7 @@ class WeatherBarApp(rumps.App):
                 self.logger.info(
                     f'Successfully changed location to {location}')
 
-                self.save_config()
+                CONFIG.save(self.config)
 
                 rumps.alert(
                     title='Success!',
@@ -405,7 +411,8 @@ class WeatherBarApp(rumps.App):
         self.logger.info('Updating config')
         self.config = modify_location(self.config, location, latitude,
                                       longitude)
-        self.save_config()
+
+        CONFIG.save(self.config)
 
         self.logger.info('Updating ClimaCell location')
         self.climacell.set_location(latitude, longitude)
@@ -415,30 +422,6 @@ class WeatherBarApp(rumps.App):
                     message=f'Your location has been changed to {location}.')
 
         self.update_weather()
-
-    def save_config(self):
-        ''' Save the config to a JSON file in the application support folder '''
-        filename = CONFIG_FILE
-        filepath = os.path.join(rumps.application_support(self.name), filename)
-        try:
-            with open(filepath, mode='w') as config_file:
-                self.logger.info('Saving config')
-                json.dump(self.config, config_file)
-        except:
-            self.logger.exception('Something went wrong when saving config')
-
-    def read_config(self):
-        ''' Load the config to a JSON file in the application support folder '''
-        filename = CONFIG_FILE
-        filepath = os.path.join(rumps.application_support(self.name), filename)
-        with open(filepath, mode='r') as config_file:
-            self.logger.info('Reading from config')
-            config = json.load(config_file)
-
-            if not valid_config(config, self.default_config):
-                raise IncompatibleConfigError()
-
-            return config
 
     def local_config(self):
         '''
@@ -480,8 +463,9 @@ class WeatherBarApp(rumps.App):
         return is_correct
 
     def handle_connection_error(self, silent=False, change_icon=False):
-        # Do nothing
-        if silent:
+        ''' Handle connection error '''
+
+        if silent:  # Do nothing
             self.logger.info('Handling connection error silently')
             return
 
@@ -508,6 +492,7 @@ class WeatherBarApp(rumps.App):
                 'https://github.com/FergusYip/WeatherBarApp'))
 
     def logger_init(self):
+        ''' Initialise logger '''
         logger = logging.getLogger('WeatherBar')
         logger.setLevel(logging.INFO)
 
@@ -518,8 +503,8 @@ class WeatherBarApp(rumps.App):
         steam_handler.setFormatter(formatter)
         logger.addHandler(steam_handler)
 
-        filename = f'WeatherBar.log'
-        filepath = os.path.join(rumps.application_support(self.name), filename)
+        filename = 'WeatherBar.log'
+        filepath = os.path.join(APP_SUPPORT_DIR, filename)
 
         file_handler = logging.FileHandler(filepath, mode='w')
         file_handler.setFormatter(formatter)
@@ -536,14 +521,6 @@ def to_fahrenheit(celsius):
 def to_celsius(fahrenheit):
     ''' Convert fahrenheit to celsius '''
     return (fahrenheit - 32) * 5.0 / 9.0
-
-
-def valid_config(config, reference_config):
-    ''' Check if a config is valid according to a reference config '''
-    for key in reference_config:
-        if not isinstance(config.get(key), type(reference_config[key])):
-            return False
-    return True
 
 
 def get_location():
