@@ -1,4 +1,7 @@
-''' DrinkMore is a MacOS menu bar app to remind you to drink more water '''
+'''
+WeatherBar MacOS
+Copyright (c) 2020 Wai Lam Fergus Yip
+'''
 
 import datetime
 import os
@@ -67,22 +70,41 @@ class WeatherBarApp(rumps.App):
 
         self.template = True
 
-        self.last_updated_menu = rumps.MenuItem(title='')
-        self.display_units = rumps.MenuItem(title='',
-                                            callback=self.change_units)
+        self.menu_items = {
+            'last_updated_menu':
+            rumps.MenuItem(title=''),
+            'display_units':
+            rumps.MenuItem(
+                title='',
+                callback=self.change_units,
+            ),
+            'change_location':
+            rumps.MenuItem(
+                title='Change Location',
+                callback=self.settings,
+            ),
+            'live_location':
+            rumps.MenuItem(
+                title='Live Location',
+                callback=self.live_location,
+            ),
+            'about':
+            rumps.MenuItem(title='About', callback=self.about)
+        }
 
         # App Menu ----------------------------------------------
 
-        self.menu.add(self.last_updated_menu)
+        self.menu.add(self.menu_items['last_updated_menu'])
 
         self.menu.add(rumps.separator)  # -----------------------
 
-        self.menu.add(self.display_units)
-        self.menu.add(rumps.MenuItem(title='Change Location'))
+        self.menu.add(self.menu_items['display_units'])
+        self.menu.add(self.menu_items['live_location'])
+        self.menu.add(self.menu_items['change_location'])
 
         self.menu.add(rumps.separator)  # -----------------------
 
-        self.menu.add(rumps.MenuItem(title='About'))
+        self.menu.add(self.menu_items['about'])
 
         # -------------------------------------------------------
 
@@ -92,6 +114,7 @@ class WeatherBarApp(rumps.App):
             'longitude': -73.9896297241625,
             'unit_system': 'si',
             'apikey': '',
+            'live_location': False,
         }
         self.config = self.default_config
 
@@ -132,7 +155,7 @@ class WeatherBarApp(rumps.App):
         if detect_location:
             try:
                 self.logger.info('Tying to load local config')
-                self.config = self.local_config()
+                local_config = self.local_config()
             except LocationNotFoundError:
                 self.logger.error(
                     'LocationNotFoundError: Coud not get current location')
@@ -143,10 +166,17 @@ class WeatherBarApp(rumps.App):
                 self.logger.exception(
                     'Something went wrong whilst loading local config')
 
+            if not self.confirm_location(local_config['location']):
+                self.prefs(local_config['location'])
+                return
+            self.config = local_config
+
         self.climacell.set_location(self.config['latitude'],
                                     self.config['longitude'])
         self.climacell.set_unit_system(self.config['unit_system'])
         self.climacell.set_apikey(self.config['apikey'])
+
+        self.menu_items['live_location'].state = self.config['live_location']
 
         CONFIG.save(self.config)
 
@@ -226,9 +256,32 @@ class WeatherBarApp(rumps.App):
         ''' Update the weather '''
         self.logger.info(f'Updating weather ~ silent = {silent}')
 
+        location = self.config['location']
+
+        if self.config['live_location']:
+            self.logger.info('Trying to load local config')
+            try:
+                local_config = self.local_config()
+                self.logger.info('Changing ClimaCell location to local')
+                self.climacell.set_location(local_config['latitude'],
+                                            local_config['longitude'])
+                location = local_config['location']
+            except LocationNotFoundError:
+                self.logger.error(
+                    'LocationNotFoundError: Could not load local config')
+                self.handle_location_error(silent=False, change_icon=True)
+                return
+            except requests.ConnectionError:
+                self.logger.error('ConnectionError: Could not get weather')
+                self.handle_connection_error(silent=silent,
+                                             change_icon=not silent)
+                return
+
         try:
             self.logger.info('Trying to get weather')
             self.weather = self.climacell.get_weather()
+
+            self.logger.info(f'Obtained weather at {location}')
             self.temp = int(round(self.weather['temp']['value'], 0))
             self.update_time()
             self.update_title()
@@ -263,22 +316,22 @@ class WeatherBarApp(rumps.App):
 
         if time:
             self.logger.info('Using time from param')
-            self.last_updated_menu.title = time
+            self.menu_items['last_updated_menu'].title = time
             return
 
         now = datetime.datetime.now()
         formatted = now.strftime("%b %d %H:%M:%S")
-        self.last_updated_menu.title = formatted
+        self.menu_items['last_updated_menu'].title = formatted
 
     def update_display_units(self):
         ''' Update the units displayed in the app menu '''
         self.logger.info('Updating display units')
         if self.config['unit_system'] == 'si':
             self.logger.info('Updating to metric units')
-            self.display_units.title = 'Metric Units (C)'
+            self.menu_items['display_units'].title = 'Metric Units (C)'
         else:
             self.logger.info('Updating to imperial units')
-            self.display_units.title = 'Imperial Units (F)'
+            self.menu_items['display_units'].title = 'Imperial Units (F)'
 
     def change_units(self, _):
         ''' Toggle between metric and imperial units '''
@@ -293,7 +346,7 @@ class WeatherBarApp(rumps.App):
             self.config['unit_system'] = 'si'
             self.temp = to_celsius(self.temp)
 
-        self.logger.info('Changing climacell unit system')
+        self.logger.info('Changing ClimaCell unit system')
         self.climacell.set_unit_system(self.config['unit_system'])
 
         if not self.icon:  # No network alert
@@ -302,12 +355,34 @@ class WeatherBarApp(rumps.App):
         self.update_display_units()
         CONFIG.save(self.config)
 
-    @rumps.clicked('Change Location')
     def settings(self, _):
         ''' Open the settings window '''
         self.logger.info(
             'Calling prefs from settings (Change Location button)')
         self.prefs()
+
+    def live_location(self, _):
+        ''' Toggle live location feature '''
+        self.logger.info('Changing live location value in config')
+        self.config['live_location'] = not self.config['live_location']
+
+        self.logger.info('Changing state of live location button')
+        self.menu_items['live_location'].state = self.config['live_location']
+
+        if self.config['live_location']:
+            self.config['live_location'] = True
+            self.menu_items['change_location'].set_callback(None)
+        else:
+            self.config['live_location'] = False
+            self.menu_items['change_location'].set_callback(self.settings)
+
+            self.logger.info('Reverting ClimaCell location to config')
+            self.climacell.set_location(self.config['latitude'],
+                                        self.config['longitude'])
+
+        CONFIG.save(self.config)
+
+        self.update_weather(silent=False)
 
     def prefs(self, current_location=None):
         ''' Settings window '''
@@ -338,7 +413,12 @@ class WeatherBarApp(rumps.App):
             self.logger.info('Clicked \'Use current location\'')
             try:
                 self.logger.info('Trying to load local config')
-                self.config = self.local_config()
+                local_config = self.local_config()
+                if not self.confirm_location(local_config['location']):
+                    self.prefs(local_config['location'])
+                    return
+
+                self.config = local_config
                 self.climacell.set_location(self.config['latitude'],
                                             self.config['longitude'])
                 location = self.config['location']
@@ -352,26 +432,23 @@ class WeatherBarApp(rumps.App):
                     message=f'Your location has been changed to {location}.')
 
                 self.update_weather()
-                return
             except LocationNotFoundError:
                 self.logger.error(
                     'LocationNotFoundError: Could not load local config')
-                rumps.alert(title='Location not found',
-                            message='Could not obtain your current location')
+                self.handle_location_error()
                 self.prefs(current_location)
-                return
             except requests.ConnectionError:
                 self.logger.error(
                     'ConnectionError: Could not load local config')
-                self.handle_connection_error()
+                self.handle_connection_error(change_icon=True)
                 self.prefs(current_location)
-                return
             except:
                 self.logger.exception(
                     'Something went wrong whilst loading local config')
                 rumps.alert(title='Something went wrong',
                             message='Quitting application')
                 rumps.quit_application()
+            return
 
         if not response.text:
             self.logger.info('Empty location input')
@@ -387,7 +464,7 @@ class WeatherBarApp(rumps.App):
         except geopy.exc.GeocoderServiceError:
             self.logger.error(
                 f'GeocoderServiceError: Could not geocode \'{location}\'')
-            self.handle_connection_error()
+            self.handle_connection_error(change_icon=True)
             self.prefs(current_location)
             return
         except:
@@ -403,7 +480,9 @@ class WeatherBarApp(rumps.App):
             self.prefs(location)
             return
 
-        self.confirm_location(geolocation)
+        if not self.confirm_location(geolocation):
+            self.prefs(geolocation)
+            return
 
         latitude = geolocation.latitude
         longitude = geolocation.longitude
@@ -441,7 +520,6 @@ class WeatherBarApp(rumps.App):
             self.logger.error('Location is not a valid geopy location')
             raise LocationNotFoundError
 
-        self.confirm_location(location['location'])
         return modify_location(self.config, location['location'],
                                location['lat'], location['lon'])
 
@@ -455,11 +533,8 @@ class WeatherBarApp(rumps.App):
                                  message=location,
                                  ok='Yes',
                                  cancel='No')
-        if not is_correct:
-            self.logger.info('Location is not correct')
-            return self.prefs(location)
-
-        self.logger.info('Location is correct')
+        self.logger.info(
+            f'Location is {"correct" if is_correct else "incorrect"}')
         return is_correct
 
     def handle_connection_error(self, silent=False, change_icon=False):
@@ -472,13 +547,30 @@ class WeatherBarApp(rumps.App):
         if change_icon:
             self.logger.info('Changing icon and time')
             self.icon = 'menubar_alert_icon.ico'
-            self.update_time('No Connection')
+            self.menu_items['last_updated_menu'].title = 'No Connection'
+            self.title = ''
 
         self.logger.info('Sending connection error alert')
         rumps.alert(title='Unable to get weather data',
                     message='Please check your internet connection.')
 
-    @rumps.clicked('About')
+    def handle_location_error(self, silent=False, change_icon=False):
+        ''' Handle connection error '''
+
+        if silent:  # Do nothing
+            self.logger.info('Handling location error silently')
+            return
+
+        if change_icon:
+            self.logger.info('Changing icon and last updated menu item')
+            self.icon = 'menubar_alert_icon.ico'
+            self.menu_items['last_updated_menu'].title = 'Location not found'
+            self.title = ''
+
+        self.logger.info('Sending location error alert')
+        rumps.alert(title='Location not found',
+                    message='Could not obtain your current location')
+
     def about(self, _):
         ''' Send alert window displaying application information '''
         self.logger.info('Opening \'About\' window')
