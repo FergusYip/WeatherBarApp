@@ -487,7 +487,7 @@ class WeatherBarApp(rumps.App):
             message=(
                 'Developed by Wai Lam Fergus Yip.\n'
                 'Weather information provided by ClimaCell API\n'
-                'Geocoding provided by GeoPy Contributors and IP-API\n'
+                'Geocoding provided by GeoPy Contributors and ipapi\n'
                 'Icon by Catalin Fertu, reused under the CC BY License.\n\n'
                 'https://github.com/FergusYip/WeatherBarApp'))
 
@@ -524,20 +524,20 @@ def to_celsius(fahrenheit):
 
 
 def get_location():
-    ''' Get the geolocation of the user via a request to IP-API '''
+    ''' Get the geolocation of the user '''
     data = get_ip_location()
 
     city = data['city']
-    zip_code = data['zip']
-    region = data['regionName']
-    country = data['country']
+    postal = data['postal']
+    region = data['region']
+    country = data['country_name']
 
-    city_zip = ' '.join([city, zip_code])
+    city_postal = ' '.join([city, postal])
 
     return {
-        'lat': data['lat'],
-        'lon': data['lon'],
-        'location': ', '.join([city_zip, region, country])
+        'lat': data['latitude'],
+        'lon': data['longitude'],
+        'location': ', '.join([city_postal, region, country])
     }
 
 
