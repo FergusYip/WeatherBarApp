@@ -1,4 +1,7 @@
-''' DrinkMore is a MacOS menu bar app to remind you to drink more water '''
+'''
+WeatherBar MacOS
+Copyright (c) 2020 Wai Lam Fergus Yip
+'''
 
 import datetime
 import os
@@ -80,11 +83,13 @@ class WeatherBarApp(rumps.App):
                 title='Change Location',
                 callback=self.settings,
             ),
-            "live_location":
+            'live_location':
             rumps.MenuItem(
                 title='Live Location',
                 callback=self.live_location,
             ),
+            'about':
+            rumps.MenuItem(title='About', callback=self.about)
         }
 
         # App Menu ----------------------------------------------
@@ -99,7 +104,7 @@ class WeatherBarApp(rumps.App):
 
         self.menu.add(rumps.separator)  # -----------------------
 
-        self.menu.add(rumps.MenuItem(title='About', callback=self.about))
+        self.menu.add(self.menu_items['about'])
 
         # -------------------------------------------------------
 
@@ -257,12 +262,22 @@ class WeatherBarApp(rumps.App):
             self.logger.info('Trying to load local config')
             try:
                 local_config = self.local_config()
-            except:
-                pass
-            self.logger.info('Changing ClimaCell location to local')
-            self.climacell.set_location(local_config['latitude'],
-                                        local_config['longitude'])
-            location = local_config['location']
+                self.logger.info('Changing ClimaCell location to local')
+                self.climacell.set_location(local_config['latitude'],
+                                            local_config['longitude'])
+                location = local_config['location']
+            except LocationNotFoundError:
+                # TODO Make new function to handle location not found
+                self.logger.error(
+                    'LocationNotFoundError: Could not load local config')
+                self.handle_connection_error(silent=silent,
+                                             change_icon=not silent)
+                return
+            except requests.ConnectionError:
+                self.logger.error('ConnectionError: Could not get weather')
+                self.handle_connection_error(silent=silent,
+                                             change_icon=not silent)
+                return
 
         try:
             self.logger.info('Trying to get weather')
@@ -333,7 +348,7 @@ class WeatherBarApp(rumps.App):
             self.config['unit_system'] = 'si'
             self.temp = to_celsius(self.temp)
 
-        self.logger.info('Changing climacell unit system')
+        self.logger.info('Changing ClimaCell unit system')
         self.climacell.set_unit_system(self.config['unit_system'])
 
         if not self.icon:  # No network alert
@@ -362,13 +377,13 @@ class WeatherBarApp(rumps.App):
             self.config['live_location'] = False
             self.menu_items['change_location'].set_callback(self.settings)
 
-            self.logger.info('Reverting climacell location to config')
+            self.logger.info('Reverting ClimaCell location to config')
             self.climacell.set_location(self.config['latitude'],
                                         self.config['longitude'])
 
         CONFIG.save(self.config)
 
-        self.update_weather()
+        self.update_weather(silent=False)
 
     def prefs(self, current_location=None):
         ''' Settings window '''
@@ -411,7 +426,7 @@ class WeatherBarApp(rumps.App):
             except requests.ConnectionError:
                 self.logger.error(
                     'ConnectionError: Could not load local config')
-                self.handle_connection_error()
+                self.handle_connection_error(change_icon=True)
                 self.prefs(current_location)
                 return
             except:
@@ -454,7 +469,7 @@ class WeatherBarApp(rumps.App):
         except geopy.exc.GeocoderServiceError:
             self.logger.error(
                 f'GeocoderServiceError: Could not geocode \'{location}\'')
-            self.handle_connection_error()
+            self.handle_connection_error(change_icon=True)
             self.prefs(current_location)
             return
         except:
@@ -537,7 +552,8 @@ class WeatherBarApp(rumps.App):
         if change_icon:
             self.logger.info('Changing icon and time')
             self.icon = 'menubar_alert_icon.ico'
-            self.update_time('No Connection')
+            self.menu_items['last_updated_menu'].title = 'No Connection'
+            self.title = ''
 
         self.logger.info('Sending connection error alert')
         rumps.alert(title='Unable to get weather data',
