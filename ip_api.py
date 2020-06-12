@@ -4,9 +4,9 @@ from error import LocationNotFoundError
 
 
 def get_ip_location():
-    ''' Get the geolocation of the user via a request to IP-API '''
+    ''' Get the geolocation of the user via a request to IP geolocation API '''
 
-    response = requests.get('http://ip-api.com/json/')
+    response = requests.get('https://ipapi.co/json/')
 
     try:
         response.raise_for_status()
@@ -15,7 +15,7 @@ def get_ip_location():
 
     data = response.json()
 
-    if data['status'] == 'fail':
+    if data.get('error') is True or data.get('city') is None:
         raise LocationNotFoundError()
 
     return data
