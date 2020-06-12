@@ -8,7 +8,7 @@ OPTIONS = {
     'plist': {
         'LSUIElement': True,
         'NSHumanReadableCopyright': 'Copyright (c) 2020 Wai Lam Fergus Yip',
-        'CFBundleVersion': '1.3.0'
+        'CFBundleVersion': '1.4.0'
     },
     'packages': ['rumps', 'requests', 'geopy'],
 }
