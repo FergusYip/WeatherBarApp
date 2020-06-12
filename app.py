@@ -364,6 +364,7 @@ class WeatherBarApp(rumps.App):
         self.prefs()
 
     def live_location(self, _):
+        ''' Toggle live location feature '''
         self.logger.info('Changing live location value in config')
         self.config['live_location'] = not self.config['live_location']
 
@@ -415,44 +416,41 @@ class WeatherBarApp(rumps.App):
             try:
                 self.logger.info('Trying to load local config')
                 local_config = self.local_config()
+                if not self.confirm_location(local_config['location']):
+                    self.prefs(local_config['location'])
+                    return
 
+                self.config = local_config
+                self.climacell.set_location(self.config['latitude'],
+                                            self.config['longitude'])
+                location = self.config['location']
+                self.logger.info(
+                    f'Successfully changed location to {location}')
+
+                CONFIG.save(self.config)
+
+                rumps.alert(
+                    title='Success!',
+                    message=f'Your location has been changed to {location}.')
+
+                self.update_weather()
             except LocationNotFoundError:
                 self.logger.error(
                     'LocationNotFoundError: Could not load local config')
                 rumps.alert(title='Location not found',
                             message='Could not obtain your current location')
                 self.prefs(current_location)
-                return
             except requests.ConnectionError:
                 self.logger.error(
                     'ConnectionError: Could not load local config')
                 self.handle_connection_error(change_icon=True)
                 self.prefs(current_location)
-                return
             except:
                 self.logger.exception(
                     'Something went wrong whilst loading local config')
                 rumps.alert(title='Something went wrong',
                             message='Quitting application')
                 rumps.quit_application()
-
-            if not self.confirm_location(local_config['location']):
-                self.prefs(local_config['location'])
-                return
-
-            self.config = local_config
-            self.climacell.set_location(self.config['latitude'],
-                                        self.config['longitude'])
-            location = self.config['location']
-            self.logger.info(f'Successfully changed location to {location}')
-
-            CONFIG.save(self.config)
-
-            rumps.alert(
-                title='Success!',
-                message=f'Your location has been changed to {location}.')
-
-            self.update_weather()
             return
 
         if not response.text:
