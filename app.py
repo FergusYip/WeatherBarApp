@@ -109,6 +109,7 @@ class WeatherBarApp(rumps.App):
             'longitude': -73.9896297241625,
             'unit_system': 'si',
             'apikey': '',
+            'live_location': False,
         }
         self.config = self.default_config
 
@@ -169,6 +170,8 @@ class WeatherBarApp(rumps.App):
                                     self.config['longitude'])
         self.climacell.set_unit_system(self.config['unit_system'])
         self.climacell.set_apikey(self.config['apikey'])
+
+        self.menu_items['live_location'].state = self.config['live_location']
 
         CONFIG.save(self.config)
 
@@ -250,7 +253,7 @@ class WeatherBarApp(rumps.App):
 
         location = self.config['location']
 
-        if self.menu_items['live_location'].state:
+        if self.config['live_location']:
             self.logger.info('Trying to load local config')
             try:
                 local_config = self.local_config()
@@ -345,18 +348,25 @@ class WeatherBarApp(rumps.App):
             'Calling prefs from settings (Change Location button)')
         self.prefs()
 
-    def live_location(self, sender):
+    def live_location(self, _):
+        self.logger.info('Changing live location value in config')
+        self.config['live_location'] = not self.config['live_location']
+
         self.logger.info('Changing state of live location button')
-        sender.state = not sender.state
+        self.menu_items['live_location'].state = self.config['live_location']
 
-        self.logger.info('Changing callback of change location button')
-        self.menu_items['change_location'].set_callback(
-            None if sender.state else self.settings)
+        if self.config['live_location']:
+            self.config['live_location'] = True
+            self.menu_items['change_location'].set_callback(None)
+        else:
+            self.config['live_location'] = False
+            self.menu_items['change_location'].set_callback(self.settings)
 
-        if not sender.state:
             self.logger.info('Reverting climacell location to config')
             self.climacell.set_location(self.config['latitude'],
                                         self.config['longitude'])
+
+        CONFIG.save(self.config)
 
         self.update_weather()
 
