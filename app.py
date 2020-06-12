@@ -267,11 +267,9 @@ class WeatherBarApp(rumps.App):
                                             local_config['longitude'])
                 location = local_config['location']
             except LocationNotFoundError:
-                # TODO Make new function to handle location not found
                 self.logger.error(
                     'LocationNotFoundError: Could not load local config')
-                self.handle_connection_error(silent=silent,
-                                             change_icon=not silent)
+                self.handle_location_error(silent=False, change_icon=True)
                 return
             except requests.ConnectionError:
                 self.logger.error('ConnectionError: Could not get weather')
@@ -437,8 +435,7 @@ class WeatherBarApp(rumps.App):
             except LocationNotFoundError:
                 self.logger.error(
                     'LocationNotFoundError: Could not load local config')
-                rumps.alert(title='Location not found',
-                            message='Could not obtain your current location')
+                self.handle_location_error()
                 self.prefs(current_location)
             except requests.ConnectionError:
                 self.logger.error(
@@ -556,6 +553,23 @@ class WeatherBarApp(rumps.App):
         self.logger.info('Sending connection error alert')
         rumps.alert(title='Unable to get weather data',
                     message='Please check your internet connection.')
+
+    def handle_location_error(self, silent=False, change_icon=False):
+        ''' Handle connection error '''
+
+        if silent:  # Do nothing
+            self.logger.info('Handling location error silently')
+            return
+
+        if change_icon:
+            self.logger.info('Changing icon and last updated menu item')
+            self.icon = 'menubar_alert_icon.ico'
+            self.menu_items['last_updated_menu'].title = 'Location not found'
+            self.title = ''
+
+        self.logger.info('Sending location error alert')
+        rumps.alert(title='Location not found',
+                    message='Could not obtain your current location')
 
     def about(self, _):
         ''' Send alert window displaying application information '''
