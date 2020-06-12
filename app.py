@@ -86,7 +86,7 @@ class WeatherBarApp(rumps.App):
             'live_location':
             rumps.MenuItem(
                 title='Live Location',
-                callback=self.live_location,
+                callback=self.live_location_btn,
             ),
             'about':
             rumps.MenuItem(title='About', callback=self.about)
@@ -176,14 +176,14 @@ class WeatherBarApp(rumps.App):
         self.climacell.set_unit_system(self.config['unit_system'])
         self.climacell.set_apikey(self.config['apikey'])
 
-        self.menu_items['live_location'].state = self.config['live_location']
+        # Set to opposite so that it can be switched back when calling live_location()
+        self.config['live_location'] = not self.config['live_location']
 
         CONFIG.save(self.config)
 
         self.update_display_units()
 
-        # Call to verify connection
-        self.update_weather(silent=False)
+        self.live_location()
 
         self.logger.info('Starting timer')
         self.timer.start()
@@ -361,7 +361,11 @@ class WeatherBarApp(rumps.App):
             'Calling prefs from settings (Change Location button)')
         self.prefs()
 
-    def live_location(self, _):
+    def live_location_btn(self, _):
+        ''' Rumps menu item wrapper for live_location '''
+        self.live_location()
+
+    def live_location(self):
         ''' Toggle live location feature '''
         self.logger.info('Changing live location value in config')
         self.config['live_location'] = not self.config['live_location']
