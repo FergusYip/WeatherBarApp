@@ -39,7 +39,7 @@ Installation instructions can be found in the project wiki - [here](https://gith
 
 [ClimaCellAPI](https://www.climacell.co/) for Weather Data
 
-[ip-api](https://ip-api.com/) for IP Geolocation data
+[ipapi](https://ipapi.co/) for IP Geolocation data
 
 # Package Dependencies
 
